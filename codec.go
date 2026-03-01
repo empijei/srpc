@@ -11,6 +11,7 @@ type empty struct{}
 
 func (empty) Read(_ []byte) (n int, err error) { return 0, io.EOF }
 
+// Codec implements functions to enCode and Decode requests and responses.
 type Codec[T any] struct {
 	ContentType string
 	KeepOpen    bool
@@ -18,6 +19,7 @@ type Codec[T any] struct {
 	Dec         func(ctx context.Context, r io.Reader) (T, error)
 }
 
+// NewCodecJSON creates a new Codec that uses JSON as wire format.
 func NewCodecJSON[T any]() Codec[T] {
 	var zero T
 	_, isEmpty := any(zero).(struct{})

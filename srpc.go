@@ -3,30 +3,24 @@ package srpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
+// QueryKey is the key for the query parameter that sRPC will use to issue state-preserving requests.
 const QueryKey = "srpc"
 
-type keyCtx string
+// Procedure is a function that can be called remotely.
+type Procedure[Response, Request any] func(ctx context.Context, req Request) (Response, error)
 
-const (
-	headerKey keyCtx = "request headers"
-)
-
-type Validable interface {
-	Validate() error
-}
-
-type ErrorResponse interface {
-	Status() int
-	Message() string
-}
-
+// Endpoint represents a single procedure.
+//
+// Both the client side and the server side can be constructed from this type.
 type Endpoint[Response, Request any] struct {
 	method        string
 	path          string
@@ -35,38 +29,53 @@ type Endpoint[Response, Request any] struct {
 	reqc          Codec[Request]
 }
 
+// NewEndpointJSON constructs an endpoint with the JSON codec.
 func NewEndpointJSON[Response, Request any](method, path string) Endpoint[Response, Request] {
 	return NewEndpoint(method, path, NewCodecJSON[Response](), NewCodecJSON[Request]())
 }
 
+// NewEndpoint constructs a new endpoint with the given codecs.
 func NewEndpoint[Response, Request any](method, path string, resc Codec[Response], reqc Codec[Request]) Endpoint[Response, Request] {
-	stateChanging := true
-	if method == http.MethodGet ||
-		method == http.MethodOptions ||
-		method == http.MethodHead {
-		stateChanging = false
+	if !strings.HasPrefix(path, "/") {
+		panic(fmt.Sprintf("path must start with '/', %q provided", path))
 	}
 	return Endpoint[Response, Request]{
 		method:        method,
 		path:          path,
-		stateChanging: stateChanging,
+		stateChanging: method != http.MethodGet && method != http.MethodOptions && method != http.MethodHead,
 		resc:          resc,
 		reqc:          reqc,
 	}
 }
 
+////////////
+// Server //
+////////////
+
+// Mux is the subset of [*http.ServeMux] that srpc requires to work.
 type Mux interface {
 	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
 }
 
-type Handler[Response, Request any] func(ctx context.Context, req Request) (Response, error)
+// Validable represents all requests that can be validated.
+//
+// All requests that implement this and that are not valid will be automatically rejected.
+type Validable interface {
+	Validate() error
+}
 
-func (e *Endpoint[Response, Request]) Serve(m Mux, h Handler[Response, Request]) {
+// ErrorResponse can be returned by handlers to control the error code when returning an error.
+type ErrorResponse interface {
+	Status() int
+	Message() string
+}
+
+// Register registers the endpoint on the mux, implemented by the procedure.
+func (e *Endpoint[Response, Request]) Register(m Mux, p Procedure[Response, Request]) {
 	m.HandleFunc(e.method+" "+e.path, func(hResp http.ResponseWriter, hReq *http.Request) {
 		ctx := hReq.Context()
-		ctx = context.WithValue(ctx, headerKey, hReq.Header)
 
-		// Parse Request.
+		// Parse Request
 
 		var req Request
 		{
@@ -94,12 +103,11 @@ func (e *Endpoint[Response, Request]) Serve(m Mux, h Handler[Response, Request])
 					return
 				}
 			}
-
 		}
 
-		// Create Response.
+		// Create Response
 
-		resp, err := h(ctx, req)
+		resp, err := p(ctx, req)
 		if err != nil {
 			// TODO find a way to have error codecs or at least to make errors.Is work with these.
 
@@ -126,7 +134,7 @@ func (e *Endpoint[Response, Request]) Serve(m Mux, h Handler[Response, Request])
 			return
 		}
 
-		// Send response.
+		// Send Response
 
 		hResp.Header().Set("Content-Type", e.resc.ContentType)
 		if c, ok := streamDown.(io.Closer); ok {
@@ -145,18 +153,166 @@ func (e *Endpoint[Response, Request]) Serve(m Mux, h Handler[Response, Request])
 	})
 }
 
-type Connector struct {
-	Origin  string
-	Client  *http.Client
-	Cookies []*http.Cookie
+////////////
+// Client //
+////////////
 
-	errs []error
+// ErrBadOrigin is returned when a bad origin is given to construct a Connector.
+var ErrBadOrigin = errors.New("bad connector origin")
+
+// Transport can be used to connect to a remote Endpoint.
+type Transport struct {
+	origin  string
+	client  *http.Client
+	cookies []*http.Cookie
 }
 
-type Client[Response, Request any] func(ctx context.Context, req Request) (Response, error)
-
-func (e *Endpoint[Response, Request]) Connect(ctx context.Context, conn *Connector) Client[Response, Request] {
-	return func(ctx context.Context, req Request) (Response, error) {
-		// TODO
+// NewTransport creates a new Connector.
+//
+// The only mandatory parameter is origin, which must have a "http" or "https" scheme,
+// a valid domain, and must not contain any path or query.
+func NewTransport(origin string, client *http.Client, cookies []*http.Cookie) (*Transport, error) {
+	c := &Transport{
+		origin:  origin,
+		client:  client,
+		cookies: cookies,
 	}
+
+	u, err := url.Parse(c.origin)
+	switch {
+	case err != nil:
+		return nil, fmt.Errorf("%w: invalid URL: %w", ErrBadOrigin, err)
+	case !strings.EqualFold(u.Scheme, "http") &&
+		!strings.EqualFold(u.Scheme, "https"):
+		return nil, fmt.Errorf(`%w: scheme must be "http" or "https": %q`, ErrBadOrigin, c.origin)
+	case u.Path != "":
+		return nil, fmt.Errorf("%w: path must be empty: %q", ErrBadOrigin, u.Path)
+	case u.RawQuery != "":
+		return nil, fmt.Errorf("%w: query must be empty: %q", ErrBadOrigin, u.RawQuery)
+	}
+
+	if client == nil {
+		c.client = http.DefaultClient
+	}
+	return c, nil
+}
+
+// RemoteWithOrigin connects to the given origin, where the endpoint is expected to be registered and served.
+func (e *Endpoint[Response, Request]) RemoteWithOrigin(origin string) Procedure[Response, Request] {
+	c, _ := NewTransport(origin, nil, nil)
+	return e.Remote(c)
+}
+
+// Remote connects to a remote server using the provided connector.
+//
+// The endpoint is expected to be registered and served on the remote server.
+func (e *Endpoint[Response, Request]) Remote(conn *Transport) Procedure[Response, Request] {
+	rawURL := conn.origin + e.path
+	reqCtor := func(ctx context.Context, streamUp io.Reader) (*http.Request, error) {
+		return http.NewRequestWithContext(ctx, e.method, rawURL, streamUp)
+	}
+	if !e.stateChanging {
+		reqCtor = func(ctx context.Context, streamUp io.Reader) (*http.Request, error) {
+			buf, err := io.ReadAll(streamUp)
+			if err != nil {
+				return nil, err
+			}
+			q := "?" + QueryKey + "=" + url.QueryEscape(string(buf))
+			return http.NewRequestWithContext(ctx, e.method, rawURL+q, nil)
+		}
+	}
+
+	return func(ctx context.Context, req Request) (resp Response, err error) {
+		var zero Response
+
+		// Create Request
+
+		streamUp, err := e.reqc.Co(ctx, req)
+		if err != nil {
+			return zero, fmt.Errorf("encoding request: %w", err)
+		}
+		hReq, err := reqCtor(ctx, streamUp)
+		if err != nil {
+			return zero, fmt.Errorf("converting request to HTTP: %w", err)
+		}
+		hReq.Header.Set("Content-Type", e.reqc.ContentType)
+		for _, cookie := range conn.cookies {
+			hReq.AddCookie(cookie)
+		}
+
+		// TODO MW
+
+		// Roundtrip
+
+		hResp, err := conn.client.Do(hReq) //nolint: gosec // these are hardcoded in sources.
+		if err != nil {
+			return zero, fmt.Errorf("issuing request: %w", err)
+		}
+
+		// Cleanups
+
+		if !e.resc.KeepOpen {
+			defer func() {
+				if cerr := hResp.Body.Close(); cerr != nil {
+					err = errors.Join(err, cerr)
+				}
+			}()
+		}
+		if !e.reqc.KeepOpen {
+			if c, ok := streamUp.(io.Closer); ok {
+				defer func() {
+					if cerr := c.Close(); cerr != nil {
+						err = errors.Join(err, fmt.Errorf("closing Request: %w", cerr))
+					}
+				}()
+			}
+		}
+
+		// Decoding
+
+		if hResp.StatusCode != http.StatusOK {
+			return zero, readErr(hResp)
+		}
+		if ct := hResp.Header.Get("Content-Type"); ct != e.resc.ContentType {
+			return zero, fmt.Errorf("Content-Type: want %q got %q", e.resc.ContentType, ct)
+		}
+		resp, err = e.resc.Dec(ctx, hResp.Body)
+		if err != nil {
+			return zero, fmt.Errorf("decoding response: %w", err)
+		}
+		return resp, nil
+	}
+}
+
+var (
+	_ ErrorResponse = &WireError{}
+	_ error         = &WireError{}
+)
+
+// WireError is an error that can be sent over the wire.
+//
+// It allows to set HTTP status and message.
+type WireError struct {
+	Msg  string
+	Code int
+}
+
+// Error implements [error].
+func (w *WireError) Error() string {
+	return fmt.Sprintf("%v %v: %v", w.Code, http.StatusText(w.Code), w.Msg)
+}
+
+// Message implements [ErrorResponse].
+func (w *WireError) Message() string { return w.Msg }
+
+// Status implements [ErrorResponse].
+func (w *WireError) Status() int { return w.Code }
+
+func readErr(resp *http.Response) error {
+	buf, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response body: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return &WireError{Msg: string(buf), Code: resp.StatusCode}
 }
