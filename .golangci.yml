@@ -47,7 +47,6 @@ linters:
     - noctx
     - nolintlint
     - nosprintfhostport
-    - paralleltest
     - perfsprint
     - predeclared
     - promlinter
