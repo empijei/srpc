@@ -1,0 +1,201 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - asasalint
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - depguard
+    - durationcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - fatcontext
+    - forbidigo
+    - forcetypeassert
+    - funlen
+    - gocheckcompilerdirectives
+    - gochecksumtype
+    - gocognit
+    - goconst
+    - gocritic
+    - godot
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - govet
+    - iface
+    - ineffassign
+    - interfacebloat
+    - intrange
+    - lll
+    - loggercheck
+    - makezero
+    - mirror
+    - mnd
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    - nolintlint
+    - nosprintfhostport
+    - paralleltest
+    - perfsprint
+    - predeclared
+    - promlinter
+    - protogetter
+    - reassign
+    - revive
+    - rowserrcheck
+    - sloglint
+    - spancheck
+    - sqlclosecheck
+    - staticcheck
+    - testableexamples
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - usetesting
+    - whitespace
+
+  # https://github.com/golangci/golangci-lint/blob/main/.golangci.reference.yml
+  settings:
+    paralleltest:
+      ignore-missing-subtests: true
+
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: math/rand$
+              desc: use math/rand/v2
+    dupl:
+      threshold: 80
+
+    errcheck:
+      check-type-assertions: true
+
+    exhaustive:
+      check:
+        - switch
+        - map
+
+    forbidigo:
+      forbid:
+        - pattern: ^exec\.Command$
+          msg: Use exec.CommandContext instead.
+        - pattern: ^time\.Sleep$
+          msg: Use select{ case <-context.Done:; case <-time.After(timeout):; } instead
+      analyze-types: true
+
+    funlen:
+      lines: 300
+      statements: 150
+      ignore-comments: true
+
+    gocognit:
+      min-complexity: 35
+
+    gocritic:
+      settings:
+        captLocal:
+          paramsOnly: false
+        elseif:
+          skipBalanced: false
+        underef:
+          skipRecvDeref: false
+
+    gomodguard:
+      blocked:
+        modules:
+          - github.com/satori/go.uuid:
+              recommendations:
+                - github.com/google/uuid
+              reason: satori's package is not maintained
+          - github.com/gofrs/uuid:
+              recommendations:
+                - github.com/gofrs/uuid/v5
+              reason: gofrs' package was not go module before v5
+
+    govet:
+      disable:
+        - fieldalignment
+        - shadow
+      enable-all: true
+
+    lll:
+      line-length: 200
+      tab-width: 4
+
+    mnd:
+      ignored-numbers:
+        - "0o666"
+        - "0o644"
+        - "0o755"
+        - "0o640"
+        - "0o750"
+        - "0o700"
+        - "0o400"
+        - "42"
+        - "2"
+        - "1"
+        - "1024"
+      ignored-functions:
+        - args\.Error
+        - flag\.Arg
+        - flag\.Duration.*
+        - flag\.Float.*
+        - flag\.Int.*
+        - flag\.Uint.*
+        - os\.Chmod
+        - os\.Mkdir.*
+        - os\.OpenFile
+        - os\.WriteFile
+
+    nakedret:
+      max-func-lines: 5
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+    usetesting:
+      os-temp-dir: true
+
+  exclusions:
+    rules:
+      - linters:
+          - gocritic
+        source: //noinspection
+      - linters:
+          - bodyclose
+          - dupl
+          - funlen
+          - gochecknoglobals
+          - goconst
+          - gosec
+          - lll
+          - noctx
+          - revive
+          - wrapcheck
+        path: _test\.go
+
+issues:
+  max-same-issues: 50
+
+formatters:
+  enable:
+    - gofumpt
+  exclusions:
+    paths:
+      - design
+      - demos

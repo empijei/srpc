@@ -13,8 +13,8 @@ type (
 )
 
 func (e *EndpointW[Request]) Serve(m Mux, h HandlerW[Request]) {
-	(*Endpoint[struct{}, Request])(e).Serve(m, func(ctx context.Context, _ struct{}, req Request) error {
-		return h(ctx, req)
+	(*Endpoint[struct{}, Request])(e).Serve(m, func(ctx context.Context, req Request) (struct{}, error) {
+		return struct{}{}, h(ctx, req)
 	})
 }
 
@@ -32,13 +32,13 @@ func (e *EndpointW[Request]) Connect(ctx context.Context, conn *Connector) Clien
 
 type (
 	EndpointR[Response any] Endpoint[Response, struct{}]
-	HandlerR[Response any]  func(ctx context.Context, resp Response) error
+	HandlerR[Response any]  func(ctx context.Context) (Response, error)
 	ClientR[Response any]   func(ctx context.Context) (Response, error)
 )
 
-func (e *EndpointR[Response]) Serve(m Mux, h HandlerW[Response]) {
-	(*Endpoint[Response, struct{}])(e).Serve(m, func(ctx context.Context, resp Response, _ struct{}) error {
-		return h(ctx, resp)
+func (e *EndpointR[Response]) Serve(m Mux, h HandlerR[Response]) {
+	(*Endpoint[Response, struct{}])(e).Serve(m, func(ctx context.Context, _ struct{}) (Response, error) {
+		return h(ctx)
 	})
 }
 
