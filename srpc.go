@@ -197,15 +197,20 @@ func NewTransport(origin string, client *http.Client, cookies []*http.Cookie) (*
 	return c, nil
 }
 
-// RemoteWithOrigin connects to the given origin, where the endpoint is expected to be registered and served.
+// RemoteWithOrigin is like Remote, but it creates a transport for the given origin.
+//
+// If the origin is invalid, RemoteWithOrigin panics.
 func (e *Endpoint[Response, Request]) RemoteWithOrigin(origin string) Procedure[Response, Request] {
-	c, _ := NewTransport(origin, nil, nil)
-	return e.Remote(c)
+	conn, err := NewTransport(origin, nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	return e.Remote(conn)
 }
 
-// Remote connects to a remote server using the provided connector.
+// Remote returns the remote procedure, ready to be called.
 //
-// The endpoint is expected to be registered and served on the remote server.
+// The endpoint needs to be registered and served on the remote server.
 func (e *Endpoint[Response, Request]) Remote(conn *Transport) Procedure[Response, Request] {
 	rawURL := conn.origin + e.path
 	reqCtor := func(ctx context.Context, streamUp io.Reader) (*http.Request, error) {
