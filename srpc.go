@@ -16,7 +16,7 @@ import (
 const QueryKey = "srpc"
 
 // Procedure is a function that can be called remotely.
-type Procedure[Response, Request any] func(ctx context.Context, req Request) (Response, error)
+type Procedure[Response, Request any] = func(ctx context.Context, req Request) (Response, error)
 
 // Endpoint represents a single procedure.
 //
