@@ -29,6 +29,15 @@ func (e *EndpointW[Request]) Remote(conn *Transport) ProcedureW[Request] {
 	}
 }
 
+// RemoteWithOrigin is like [Endpoint.RemoteWithOrigin] for EndpointW.
+func (e *EndpointW[Request]) RemoteWithOrigin(origin string) ProcedureW[Request] {
+	conn, err := NewTransport(origin, nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	return e.Remote(conn)
+}
+
 ///////////////
 // Read Only //
 ///////////////
@@ -53,4 +62,13 @@ func (e *EndpointR[Response]) Remote(conn *Transport) ProcedureR[Response] {
 	return func(ctx context.Context) (Response, error) {
 		return cl(ctx, struct{}{})
 	}
+}
+
+// RemoteWithOrigin is like [Endpoint.RemoteWithOrigin] for [EndpointR].
+func (e *EndpointR[Response]) RemoteWithOrigin(origin string) ProcedureR[Response] {
+	conn, err := NewTransport(origin, nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	return e.Remote(conn)
 }

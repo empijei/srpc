@@ -2,6 +2,7 @@
 package srpc
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -60,6 +61,10 @@ type Mux interface {
 // Validable represents all requests that can be validated.
 //
 // All requests that implement this and that are not valid will be automatically rejected.
+//
+// IMPORTANT NOTE: the validation error is returned to the client, so it should be
+// telling enough for a user to understand what is wrong, but it should not contain
+// internal or secret information.
 type Validable interface {
 	Validate() error
 }
@@ -97,9 +102,7 @@ func (e *Endpoint[Response, Request]) Register(m Mux, p Procedure[Response, Requ
 
 			if val, ok := any(req).(Validable); ok {
 				if err := val.Validate(); err != nil {
-					slog.LogAttrs(ctx, slog.LevelInfo, "Invalid request",
-						slog.String("error", fmt.Sprintf("validating: %s", err)))
-					http.Error(hResp, "Invalid request.", http.StatusBadRequest)
+					http.Error(hResp, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
 					return
 				}
 			}
@@ -319,5 +322,8 @@ func readErr(resp *http.Response) error {
 		return fmt.Errorf("read response body: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	return &WireError{Msg: string(buf), Code: resp.StatusCode}
+	return &WireError{
+		Code: resp.StatusCode,
+		Msg:  string(bytes.TrimSpace(buf)),
+	}
 }
