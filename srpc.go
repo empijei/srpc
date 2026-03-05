@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -33,6 +34,11 @@ type Endpoint[Response, Request any] struct {
 // NewEndpointJSON constructs an endpoint with the JSON codec.
 func NewEndpointJSON[Response, Request any](method, path string) Endpoint[Response, Request] {
 	return NewEndpoint(method, path, NewCodecJSON[Response](), NewCodecJSON[Request]())
+}
+
+// NewEndpointSeq constructs and endpoint with JSON request and Seq response.
+func NewEndpointSeq[Response, Request any](method, path string) Endpoint[iter.Seq2[Response, error], Request] {
+	return NewEndpoint(method, path, NewCodecSeq[Response](), NewCodecJSON[Request]())
 }
 
 // NewEndpoint constructs a new endpoint with the given codecs.
