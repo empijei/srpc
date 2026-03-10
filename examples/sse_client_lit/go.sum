@@ -1,0 +1,6 @@
+github.com/empijei/srpc v0.0.0-20260305211441-0a09f63f9711 h1:dm99MAk0bZ/A44XWPgRAkTFFkoUlfJkGiC57z6KSKhU=
+github.com/empijei/srpc v0.0.0-20260305211441-0a09f63f9711/go.mod h1:wszjkvad7KnaLvE+OFLmfIWwLzIZe1AjC+Pt6R/1Mqo=
+github.com/empijei/tst v0.0.0-20260306213552-2a12dadad83d h1:36b0yU4f4UUxkYd8oPXH38uCKw9+rDDlW8ZTgcMvFbs=
+github.com/empijei/tst v0.0.0-20260306213552-2a12dadad83d/go.mod h1:yhB/XtQiGBa0i7exjbB38IpwbxJm0Jk7y4j7pc+frM8=
+github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=

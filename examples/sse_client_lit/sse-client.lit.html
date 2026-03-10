@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+
+<!--
+Note: you should probably also take a look at the typescript examples, which are
+easier to understand since they use decorators instead of explicit calls.
+-->
+
+<head>
+    <script type="module">
+        import { html, css, LitElement } from 'https://esm.run/lit';
+
+        export class SimpleSSEClient extends LitElement {
+            static styles = css`p { color: blue }`;
+            static properties = {
+                value: { type: Number },
+            };
+            constructor() {
+                super();
+                this.value = 42;
+
+                // These should normally connect and disconnect using the appropriate
+                // lifecycle hooks, but this is a simple example.
+                // https://lit.dev/docs/components/lifecycle/
+
+                const req = { From: 42 };
+                const url = new URL('/api/counter', window.location.origin);
+                url.searchParams.set('srpc', JSON.stringify(req));
+                const eventSource = new EventSource(url.toString());
+
+                eventSource.addEventListener('val', (event) => {
+                    const data = JSON.parse(event.data);
+                    this.value = data.Value
+                });
+                eventSource.addEventListener('err', (event) => {
+                    console.log('Server sent an error: ', event)
+                });
+                eventSource.onerror = (error) => {
+                    console.error('EventSource failed:', error);
+                };
+            }
+            render() {
+                return html`<p>Last value: ${this.value}!</p>`;
+            }
+        }
+        customElements.define('simple-sse-client', SimpleSSEClient);
+    </script>
+</head>
+
+<body>
+    <simple-sse-client></simple-sse-client>
+</body>
