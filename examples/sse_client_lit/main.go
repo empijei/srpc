@@ -20,7 +20,7 @@ type Response struct {
 	Value int
 }
 
-var ep = srpc.NewEndpointSeq[Response, Request](http.MethodGet, "/api/counter")
+var ep = srpc.NewEndpointSeq[Response, Request]("/api/counter")
 
 //go:embed sse-client.lit.html
 var html string

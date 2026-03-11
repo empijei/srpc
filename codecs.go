@@ -71,6 +71,11 @@ func NewCodecJSON[T any]() Codec[T] {
 
 // Seq
 
+const (
+	evtVal = "val"
+	evtErr = "err"
+)
+
 type wireSeq[T any] struct {
 	seq    iter.Seq2[T, error]
 	closed atomic.Bool
@@ -167,11 +172,6 @@ func (i *wireSeq[T]) writeMessage(w writeFlusher, n int64, v T, seqErr error, bu
 	return n + c, nil
 }
 
-const (
-	evtVal = "val"
-	evtErr = "err"
-)
-
 var (
 	evtValB = []byte(evtVal)
 	evtErrB = []byte(evtErr)
@@ -240,6 +240,10 @@ func parseSSE(r io.Reader) iter.Seq2[[]byte, error] {
 }
 
 // NewCodecSeq constructs an iter.Seq codec that supports Server-Sent-Events.
+//
+// The events are "val" and "err".
+//
+// Yielding a value and an error at the same time is not supported.
 func NewCodecSeq[T any]() Codec[iter.Seq2[T, error]] {
 	return Codec[iter.Seq2[T, error]]{
 		ContentType: "text/event-stream",

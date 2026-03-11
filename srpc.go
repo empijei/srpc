@@ -37,8 +37,13 @@ func NewEndpointJSON[Response, Request any](method, path string) Endpoint[Respon
 }
 
 // NewEndpointSeq constructs and endpoint with JSON request and Seq response.
-func NewEndpointSeq[Response, Request any](method, path string) Endpoint[iter.Seq2[Response, error], Request] {
-	return NewEndpoint(method, path, NewCodecSeq[Response](), NewCodecJSON[Request]())
+//
+// The method is forced to be GET since web clients only support GET EventSources.
+//
+// The events are "val" and "err", based on what the Procedure passes to yield.
+// Yielding a value and an error at the same time is not supported.
+func NewEndpointSeq[Response, Request any](path string) Endpoint[iter.Seq2[Response, error], Request] {
+	return NewEndpoint(string(http.MethodGet), path, NewCodecSeq[Response](), NewCodecJSON[Request]())
 }
 
 // NewEndpoint constructs a new endpoint with the given codecs.
