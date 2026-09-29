@@ -1,7 +1,8 @@
 module github.com/empijei/srpc
 
-go 1.26.0
+go 1.27.0
 
-require github.com/empijei/tst v0.0.0-20260303140155-3196befe4273
-
-require github.com/google/go-cmp v0.7.0 // indirect
+require (
+	github.com/empijei/tst v0.1.1
+	github.com/google/go-cmp v0.7.0 // indirect
+)

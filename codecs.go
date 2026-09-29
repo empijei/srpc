@@ -10,6 +10,7 @@ import (
 	"io"
 	"iter"
 	"net/http"
+	"strings"
 	"sync/atomic"
 )
 
@@ -67,6 +68,31 @@ func NewCodecJSON[T any]() Codec[T] {
 			return t, json.NewDecoder(r).Decode(&t)
 		},
 	}
+}
+
+// Streams
+
+var noData = io.NopCloser(strings.NewReader(""))
+
+// CodecStream is a Codec to stream raw data.
+var CodecStream = Codec[io.ReadCloser]{
+	ContentType: "application/octet-stream",
+	KeepOpen:    true,
+	Co: func(_ context.Context, r io.ReadCloser) (io.Reader, error) {
+		if r == nil {
+			return noData, nil
+		}
+		return r, nil
+	},
+	Dec: func(_ context.Context, r io.Reader) (io.ReadCloser, error) {
+		if r == nil {
+			return noData, nil
+		}
+		if rc, ok := r.(io.ReadCloser); ok {
+			return rc, nil
+		}
+		return io.NopCloser(r), nil
+	},
 }
 
 // Seq
